@@ -77,50 +77,11 @@ class LostFoundSystem:
 def create_sample_data():
     system = LostFoundSystem()
 
-    lost1 = Item(
-        item_id="L-101",
-        name="Black Wallet",
-        category="wallet",
-        color="black",
-        location="library",
-        description="Black leather wallet with academic ID and cash",
-        date_reported="2026-09-15",
-        owner_name="Aisha",
-    )
+    lost1 = Item(item_id="L-101",name="Black Wallet",category="wallet",color="black",location="library",description="Black leather wallet with academic ID and cash",date_reported="2026-09-15",owner_name="Aisha")
+    found1 = Item(item_id="F-202",name="Black Leather Wallet",category="wallet",color="black",location="library",description="Found near the library study hall; leather wallet",date_reported="2026-09-16",owner_name="Campus Desk")
 
-    found1 = Item(
-        item_id="F-202",
-        name="Black Leather Wallet",
-        category="wallet",
-        color="black",
-        location="library",
-        description="Found near the library study hall; leather wallet",
-        date_reported="2026-09-16",
-        owner_name="Campus Desk",
-    )
-
-    lost2 = Item(
-        item_id="L-102",
-        name="Red Notebook",
-        category="notebook",
-        color="red",
-        location="engineering block",
-        description="Red spiral notebook with mathematics notes",
-        date_reported="2026-09-17",
-        owner_name="Rahul",
-    )
-
-    found2 = Item(
-        item_id="F-203",
-        name="Notebook",
-        category="notebook",
-        color="red",
-        location="engineering block",
-        description="Red notebook found in classroom 204",
-        date_reported="2026-09-18",
-        owner_name="Campus Desk",
-    )
-
+    lost2 = Item(item_id="L-102"color="red",location="engineering block",description="Red spiral notebook with mathematics notes",date_reported="2026-09-17",owner_name="Rahul",)
+    found2 = Item(item_id="F-203",name="Notebook",category="notebook",color="red",location="engineering block",description="Red notebook found in classroom 204",date_reported="2026-09-18",owner_name="Campus Desk",)
     system.add_lost_item(lost1)
     system.add_found_item(found1)
     system.add_lost_item(lost2)
@@ -146,17 +107,7 @@ def collect_item():
     date_reported = input("Enter date (YYYY-MM-DD): ")
     owner_name = input("Enter owner/contact name: ")
 
-    return Item(
-        item_id=item_id,
-        name=name,
-        category=category,
-        color=color,
-        location=location,
-        description=description,
-        date_reported=date_reported,
-        owner_name=owner_name,
-        status="active",
-    )
+    return Item(item_id=item_id,name=name,category=category,color=color,location=location,description=description,date_reported=date_reported,owner_name=owner_name,status="active",)
 
 
 def main():
