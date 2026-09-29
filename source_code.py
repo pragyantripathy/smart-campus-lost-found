@@ -1,92 +1,196 @@
-from dataclasses import dataclass
+# Smart Campus Lost & Found Matching System
+# Simple version: lost items are matched with found items using a score out of 100.
+
 from datetime import datetime
-from typing import List, Dict, Any
+
+# Common words that should not count as a "match"
+STOP_WORDS = ["a", "an", "the", "and", "with", "in", "on", "at", "of",
+              "near", "found", "lost", "is", "was", "for", "to"]
 
 
-@dataclass
 class Item:
-    item_id: str
-    name: str
-    category: str
-    color: str
-    location: str
-    description: str
-    date_reported: str
-    owner_name: str = ""
-    status: str = "active"
+    def __init__(self, item_id, name, category, color, location,
+                 description, date_reported, owner_name):
+        self.item_id = item_id
+        self.name = name
+        self.category = category
+        self.color = color
+        self.location = location
+        self.description = description
+        self.date_reported = date_reported
+        self.owner_name = owner_name
+        self.status = "active"   # becomes "returned" once handed back
 
 
-class LostFoundSystem:
-    def __init__(self):
-        self.lost_items: List[Item] = []
-        self.found_items: List[Item] = []
+lost_items = []
+found_items = []
 
-    def normalize_text(self, text: str) -> str:
-        return " ".join(text.lower().split())
 
-    def compute_match_score(self, lost_item: Item, found_item: Item) -> float:
-        score = 0.0
+# ---------- Helper functions ----------
 
-        if lost_item.category.lower() == found_item.category.lower():
-            score += 25
+def clean(text):
+    """Lowercase the text and remove extra spaces."""
+    return " ".join(text.lower().split())
+
+
+def get_keywords(text):
+    """Return the important words of a text (stop words removed)."""
+    words = clean(text).split()
+    keywords = set()
+    for word in words:
+        if word not in STOP_WORDS:
+            keywords.add(word)
+    return keywords
+
+
+def is_valid_date(date_text):
+    try:
+        datetime.strptime(date_text, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def find_item(items, item_id):
+    """Search a list for an item with the given ID."""
+    for item in items:
+        if item.item_id == item_id:
+            return item
+    return None
+
+
+def id_exists(item_id):
+    return find_item(lost_items, item_id) is not None or \
+           find_item(found_items, item_id) is not None
+
+
+# ---------- Matching logic ----------
+
+def calculate_score(lost, found):
+    """Score out of 100:
+       category 25 + color 20 + location 20 + keywords 25 + date 10"""
+    score = 0
+
+    # Category
+    if clean(lost.category) == clean(found.category):
+        score += 25
+
+    # Color
+    if clean(lost.color) == clean(found.color):
+        score += 20
+
+    # Location (partial match allowed: "library" matches "library study hall")
+    lost_place = clean(lost.location)
+    found_place = clean(found.location)
+    if lost_place in found_place or found_place in lost_place:
+        score += 20
+
+    # Keywords from name + description (5 points per common word, max 25)
+    lost_words = get_keywords(lost.name + " " + lost.description)
+    found_words = get_keywords(found.name + " " + found.description)
+    common = lost_words & found_words
+    score += min(len(common) * 5, 25)
+
+    # Date (dates are already checked when the item is added)
+    lost_date = datetime.strptime(lost.date_reported, "%Y-%m-%d")
+    found_date = datetime.strptime(found.date_reported, "%Y-%m-%d")
+    days_apart = abs((found_date - lost_date).days)
+    if days_apart <= 2:
+        score += 10
+    elif days_apart <= 7:
+        score += 5
+
+    return score
+
+
+def find_matches(lost):
+    """Return a list of (score, found_item), best match first."""
+    results = []
+    for found in found_items:
+        if found.status != "active":
+            continue   # skip items already returned
+        results.append((calculate_score(lost, found), found))
+    results.sort(key=lambda pair: pair[0], reverse=True)
+    return results
+
+
+# ---------- Input / output ----------
+
+def collect_item():
+    """Ask the user for item details and return an Item."""
+    while True:
+        item_id = input("Enter item ID: ").strip()
+        if item_id == "":
+            print("ID cannot be empty.")
+        elif id_exists(item_id):
+            print("This ID is already used. Try another one.")
         else:
-            score += 5
+            break
 
-        if lost_item.color.lower() == found_item.color.lower():
-            score += 20
+    name = input("Enter item name: ")
+    category = input("Enter item category: ")
+    color = input("Enter item color: ")
+    location = input("Enter location: ")
+    description = input("Enter item description: ")
 
-        if lost_item.location.lower() == found_item.location.lower():
-            score += 20
+    while True:
+        date_reported = input("Enter date (YYYY-MM-DD): ").strip()
+        if is_valid_date(date_reported):
+            break
+        print("Invalid date. Please use the format YYYY-MM-DD.")
 
-        lost_keywords = set(self.normalize_text(lost_item.name + " " + lost_item.description).split())
-        found_keywords = set(self.normalize_text(found_item.name + " " + found_item.description).split())
-        common_keywords = lost_keywords & found_keywords
-        score += min(len(common_keywords) * 10, 25)
+    owner_name = input("Enter owner/contact name: ")
 
-        try:
-            lost_date = datetime.strptime(lost_item.date_reported, "%Y-%m-%d")
-            found_date = datetime.strptime(found_item.date_reported, "%Y-%m-%d")
-            days_apart = abs((found_date - lost_date).days)
-            if days_apart <= 2:
-                score += 10
-            elif days_apart <= 7:
-                score += 5
-        except ValueError:
-            pass
-
-        if self.normalize_text(lost_item.description) in self.normalize_text(found_item.description):
-            score += 10
-
-        return round(score, 2)
-
-    def add_lost_item(self, item: Item):
-        self.lost_items.append(item)
-
-    def add_found_item(self, item: Item):
-        self.found_items.append(item)
-
-    def find_matches(self, lost_item: Item) -> List[Dict[str, Any]]:
-        matches = []
-        for found_item in self.found_items:
-            score = self.compute_match_score(lost_item, found_item)
-            matches.append({"found_item": found_item, "score": score})
-        matches.sort(key=lambda m: m["score"], reverse=True)
-        return matches
+    return Item(item_id, name, category, color, location,
+                description, date_reported, owner_name)
 
 
-def create_sample_data():
-    system = LostFoundSystem()
+def show_matches():
+    item_id = input("Enter lost item ID to find matches: ").strip()
+    lost = find_item(lost_items, item_id)
 
-    lost1 = Item(item_id="L-101",name="Black Wallet",category="wallet",color="black",location="library",description="Black leather wallet with academic ID and cash",date_reported="2026-09-15",owner_name="Aisha")
-    found1 = Item(item_id="F-202",name="Black Leather Wallet",category="wallet",color="black",location="library",description="Found near the library study hall; leather wallet",date_reported="2026-09-16",owner_name="Campus Desk")
+    if lost is None:
+        print("Lost item not found.")
+        return
 
-    lost2 = Item(item_id="L-102", name="Notebook", category="notebook", color="red", location="engineering block", description="Red spiral notebook with mathematics notes", date_reported="2026-09-17", owner_name="Rahul")
-    found2 = Item(item_id="F-203",name="Notebook",category="notebook",color="red",location="engineering block",description="Red notebook found in classroom 204",date_reported="2026-09-18",owner_name="Campus Desk",)
-    system.add_lost_item(lost1)
-    system.add_found_item(found1)
-    system.add_lost_item(lost2)
-    system.add_found_item(found2)
-    return system
+    matches = find_matches(lost)
+    if len(matches) == 0:
+        print("No found items available.")
+        return
+
+    print("\nTop possible matches:")
+    number = 1
+    for score, found in matches[:5]:
+        print(f"{number}. [{found.item_id}] {found.name} ({found.category}) - Match: {score}%")
+        print(f"   Location: {found.location} | Color: {found.color} | Date: {found.date_reported}")
+        print(f"   Description: {found.description}")
+        number += 1
+
+
+def mark_returned():
+    item_id = input("Enter found item ID that was returned: ").strip()
+    found = find_item(found_items, item_id)
+
+    if found is None:
+        print("Found item not found.")
+    else:
+        found.status = "returned"
+        print("Item marked as returned. It will not appear in matches anymore.")
+
+
+def add_sample_data():
+    lost_items.append(Item("L-101", "Black Wallet", "wallet", "black", "library",
+                           "Black leather wallet with academic ID and cash",
+                           "2026-09-15", "Aisha"))
+    found_items.append(Item("F-202", "Black Leather Wallet", "wallet", "black", "library",
+                            "Found near the library study hall; leather wallet",
+                            "2026-09-16", "Campus Desk"))
+    lost_items.append(Item("L-102", "Notebook", "notebook", "red", "engineering block",
+                           "Red spiral notebook with mathematics notes",
+                           "2026-09-17", "Rahul"))
+    found_items.append(Item("F-203", "Notebook", "notebook", "red", "engineering block",
+                            "Red notebook found in classroom 204",
+                            "2026-09-18", "Campus Desk"))
 
 
 def print_menu():
@@ -94,70 +198,32 @@ def print_menu():
     print("1. Add Lost Item")
     print("2. Add Found Item")
     print("3. Find Matches")
-    print("4. Exit")
-
-
-def collect_item():
-    item_id = input("Enter item ID: ")
-    name = input("Enter item name: ")
-    category = input("Enter item category: ")
-    color = input("Enter item color: ")
-    location = input("Enter lost/found location: ")
-    description = input("Enter item description: ")
-    date_reported = input("Enter date (YYYY-MM-DD): ")
-    owner_name = input("Enter owner/contact name: ")
-
-    return Item(item_id=item_id,name=name,category=category,color=color,location=location,description=description,date_reported=date_reported,owner_name=owner_name,status="active",)
+    print("4. Mark Found Item as Returned")
+    print("5. Exit")
 
 
 def main():
-    system = create_sample_data()
+    add_sample_data()
 
     while True:
         print_menu()
-        option = input("Choose an option: ")
+        option = input("Choose an option: ").strip()
 
         if option == "1":
-            item = collect_item()
-            system.add_lost_item(item)
+            lost_items.append(collect_item())
             print("Lost item added successfully.")
-
         elif option == "2":
-            item = collect_item()
-            system.add_found_item(item)
+            found_items.append(collect_item())
             print("Found item added successfully.")
-
         elif option == "3":
-            item_id = input("Enter lost item ID to find matches: ")
-            lost_item = None
-            for item in system.lost_items:
-                if item.item_id == item_id:
-                    lost_item = item
-                    break
-
-            if lost_item is None:
-                print("Lost item not found.")
-                continue
-
-            matches = system.find_matches(lost_item)
-            print("\nRanked possible matches:")
-            if not matches:
-                print("No matches found.")
-                continue
-
-            for index, match in enumerate(matches[:5], start=1):
-                found_item = match["found_item"]
-                print(f"{index}. {found_item.name} ({found_item.category}) - Score: {match['score']}%")
-                print(f"   Location: {found_item.location} | Color: {found_item.color} | Date: {found_item.date_reported}")
-                print(f"   Description: {found_item.description}")
-
+            show_matches()
         elif option == "4":
-            print("Exiting the system. Goodbye!")
+            mark_returned()
+        elif option == "5":
+            print("Goodbye!")
             break
-
         else:
             print("Invalid option. Please try again.")
 
 
-if __name__ == "__main__":
-    main()
+main()
